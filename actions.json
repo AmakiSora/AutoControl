@@ -1,0 +1,86 @@
+{
+    "monitor": 1,
+    "template_dir": "templates",
+    "actions": [
+        {
+            "type": "log",
+            "message": "=== Starting automation ==="
+        },
+        {
+            "id": "search_btn",
+            "type": "recognize",
+            "template": "search.jpg",
+            "threshold": 0.8,
+            "retry_interval": 1,
+            "timeout": 30,
+            "on_success": [
+                {
+                    "type": "log",
+                    "message": "Found search button, clicking..."
+                },
+                {
+                    "type": "click",
+                    "x": "{search_btn.center_x}",
+                    "y": "{search_btn.center_y}",
+                    "button": "left"
+                }
+            ],
+            "on_failure": [
+                {
+                    "type": "log",
+                    "message": "Search button not found on screen"
+                }
+            ]
+        },
+        {
+            "type": "wait",
+            "duration": 2
+        },
+        {
+            "id": "result_icon",
+            "type": "recognize",
+            "template": "result.jpg",
+            "threshold": 0.75,
+            "retry_interval": 0.5,
+            "timeout": 10,
+            "on_success": [
+                {
+                    "type": "move",
+                    "x": "{result_icon.center_x}",
+                    "y": "{result_icon.center_y}"
+                },
+                {
+                    "type": "click",
+                    "x": "{result_icon.center_x}",
+                    "y": "{result_icon.center_y}",
+                    "button": "right"
+                }
+            ],
+            "on_failure": [
+                {
+                    "type": "log",
+                    "message": "Result icon not found, will retry later"
+                }
+            ]
+        },
+        {
+            "type": "group",
+            "actions": [
+                {
+                    "type": "log",
+                    "message": "Performing cleanup sequence..."
+                },
+                {
+                    "type": "click",
+                    "x": 100,
+                    "y": 200,
+                    "button": "left"
+                },
+                {
+                    "type": "wait",
+                    "duration": 1
+                }
+            ]
+        }
+    ]
+}
