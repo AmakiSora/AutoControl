@@ -80,37 +80,47 @@ class ActionEngine:
         atype = action['type']
         aid = action.get('id')
         result = None
-        stop_on_failure = action.get('stop_on_failure', False)
 
         if atype == 'click':
             x, y = self._resolve_pos(action)
             btn = action.get('button', 'left')
+            btn_label = '右键' if btn == 'right' else '左键'
+            print(f"[CLICK] ({x}, {y}) {btn_label}")
             mouse.click(x, y, button=btn)
 
         elif atype == 'move':
             x, y = self._resolve_pos(action)
+            print(f"[MOVE] → ({x}, {y})")
             mouse.move_to(x, y)
 
         elif atype == 'recognize':
+            tpl = self._resolve(action.get('template', ''))
+            print(f"[RECOGNIZE] 搜索模板: {tpl}")
             result = self._exec_recognize(action)
+            if result.get('found'):
+                print(f"  → ✓ 找到, 坐标=({result['center_x']}, {result['center_y']}), 置信度={result['confidence']:.2%}")
+            else:
+                print(f"  → ✗ 未找到")
 
         elif atype == 'wait':
-            time.sleep(action.get('duration', 1))
-
-        elif atype == 'log':
-            print(self._resolve(action.get('message', '')))
+            dur = action.get('duration', 1)
+            print(f"[WAIT] {dur}秒")
+            time.sleep(dur)
 
         elif atype == 'group':
-            for sub in action.get('actions', []):
-                self.execute(sub)
+            subs = action.get('actions', [])
+            print(f"[GROUP] 开始执行 {len(subs)} 个子动作")
+            for s in subs:
+                self.execute(s)
+            print(f"[GROUP] 完成")
 
         elif atype == 'loop':
             count = action.get('count', 1)
             interval = action.get('interval', 0)
             for i in range(count):
-                print(f"[LOOP] {i + 1}/{count}")
-                for sub in action.get('actions', []):
-                    self.execute(sub)
+                print(f"[LOOP] 第 {i+1}/{count} 轮")
+                for s in action.get('actions', []):
+                    self.execute(s)
                 if interval and i < count - 1:
                     time.sleep(interval)
 

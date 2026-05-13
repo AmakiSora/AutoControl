@@ -3,10 +3,6 @@
     "template_dir": "templates",
     "actions": [
         {
-            "type": "log",
-            "message": "=== Starting automation ==="
-        },
-        {
             "id": "search_btn",
             "type": "recognize",
             "template": "search.jpg",
@@ -14,10 +10,6 @@
             "retry_interval": 1,
             "timeout": 30,
             "on_success": [
-                {
-                    "type": "log",
-                    "message": "Found search button, clicking..."
-                },
                 {
                     "type": "click",
                     "x": "{search_btn.center_x}",
@@ -27,8 +19,8 @@
             ],
             "on_failure": [
                 {
-                    "type": "log",
-                    "message": "Search button not found on screen"
+                    "type": "wait",
+                    "duration": 1
                 }
             ]
         },
@@ -58,18 +50,14 @@
             ],
             "on_failure": [
                 {
-                    "type": "log",
-                    "message": "Result icon not found, will retry later"
+                    "type": "wait",
+                    "duration": 3
                 }
             ]
         },
         {
             "type": "group",
             "actions": [
-                {
-                    "type": "log",
-                    "message": "Performing cleanup sequence..."
-                },
                 {
                     "type": "click",
                     "x": 100,
