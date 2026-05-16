@@ -21,7 +21,7 @@ class ActionEngine:
         self._url_cache = {}
         self.keep_template = config.get('keep_template', False)
         
-        if self.keep_template and not os.path.exists(self.template_dir):
+        if self.keep_template and self.template_dir and not os.path.exists(self.template_dir):
             os.makedirs(self.template_dir, exist_ok=True)
 
     def _resolve(self, value):
@@ -126,8 +126,7 @@ class ActionEngine:
             if temp_file is None:
                 return {'found': False}
             template_path = temp_file
-        
-        if not os.path.isabs(template_path):
+        elif not os.path.isabs(template_path) and self.template_dir and not template_path.startswith(self.template_dir):
             template_path = os.path.join(self.template_dir, template_path)
 
         threshold = float(action.get('threshold', 0.8))
