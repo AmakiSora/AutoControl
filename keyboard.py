@@ -84,11 +84,11 @@ class INPUT(ctypes.Structure):
 def _make_key_input(vk_code, flags=0):
     inp = INPUT()
     inp.type = INPUT_KEYBOARD
-    inp.input.ki.wVk = vk_code
+    inp.input.ki.wVk = ctypes.c_ushort(vk_code)
     inp.input.ki.wScan = 0
     inp.input.ki.dwFlags = flags
     inp.input.ki.time = 0
-    inp.input.ki.dwExtraInfo = ctypes.pointer(wintypes.ULONG(0))
+    inp.input.ki.dwExtraInfo = ctypes.c_ulong(0)
     return inp
 
 
@@ -115,10 +115,10 @@ def _get_vk_code(key):
     """获取键的虚拟键码"""
     key_lower = key.lower()
     if key_lower in VK_CODES:
-        return VK_CODES[key_lower]
+        return int(VK_CODES[key_lower])
     
     if len(key) == 1:
-        return wintypes.WORD(ord(key.upper()))
+        return int(ord(key.upper()))
     
     return None
 
