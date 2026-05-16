@@ -22,8 +22,6 @@ def main():
     # 应用全局配置
     if config.get('keep_template'):
         engine.keep_template = True
-    if config.get('templates_dir'):
-        engine.templates_dir = config['templates_dir']
 
     if isinstance(actions, dict):
         actions = [actions]

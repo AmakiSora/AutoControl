@@ -241,20 +241,15 @@
           <input type="number" id="globalMonitor" min="1" value="1" class="w-full">
         </div>
         <div>
-          <label class="block text-sm font-medium mb-1">模板图片目录</label>
+          <label class="block text-sm font-medium mb-1">模板目录</label>
           <input type="text" id="globalTemplateDir" value="templates" class="w-full">
         </div>
         <div>
           <label class="block text-sm font-medium mb-1">保留下载的模板图片</label>
           <label class="flex items-center gap-2 mt-1">
             <input type="checkbox" id="globalKeepTemplate" class="rounded">
-            <span class="text-sm text-muted-foreground">启用后将保存到下方指定目录</span>
+            <span class="text-sm text-muted-foreground">启用后将保存到模板目录</span>
           </label>
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">下载图片保存目录</label>
-          <input type="text" id="globalTemplatesDir" value="./templates" class="w-full font-mono text-sm">
-          <div class="text-xs text-muted-foreground mt-1">默认为 ./templates，使用 URL 哈希命名</div>
         </div>
       </div>
       <div class="flex justify-end gap-3 mt-6">
@@ -289,7 +284,7 @@
       monitor: 1,
       template_dir: 'templates',
       keep_template: false,
-      templates_dir: './templates',
+      template_dir: 'templates',
       actions: [],
       selectedId: null,
       nextId: 1,
@@ -952,7 +947,6 @@
         monitor: state.monitor,
         template_dir: state.template_dir,
         keep_template: state.keep_template,
-        templates_dir: state.templates_dir,
         actions: state.actions.map(cleanAction),
       };
 
@@ -991,7 +985,7 @@
       state.monitor = data.monitor || 1;
       state.template_dir = data.template_dir || 'templates';
       state.keep_template = data.keep_template || false;
-      state.templates_dir = data.templates_dir || './templates';
+      state.template_dir = data.template_dir || './templates';
       state.actions = data.actions || [];
       state.selectedId = null;
 
@@ -1031,15 +1025,13 @@
     function updateGlobalDisplay() {
       document.getElementById('displayMonitor').textContent = state.monitor;
       document.getElementById('displayTemplateDir').textContent = state.template_dir;
-      document.getElementById('displayKeepTemplate').textContent = state.keep_template ? '是' : '否';
-      document.getElementById('displayTemplatesDir').textContent = state.templates_dir;
     }
 
     document.getElementById('globalSettings').addEventListener('click', () => {
       document.getElementById('globalMonitor').value = state.monitor;
       document.getElementById('globalTemplateDir').value = state.template_dir;
       document.getElementById('globalKeepTemplate').checked = state.keep_template;
-      document.getElementById('globalTemplatesDir').value = state.templates_dir;
+      document.getElementById('globalTemplateDir').value = state.template_dir;
       document.getElementById('globalModal').classList.remove('hidden');
       document.getElementById('globalModal').classList.add('flex');
     });
@@ -1053,7 +1045,7 @@
       state.monitor = parseInt(document.getElementById('globalMonitor').value) || 1;
       state.template_dir = document.getElementById('globalTemplateDir').value || 'templates';
       state.keep_template = document.getElementById('globalKeepTemplate').checked;
-      state.templates_dir = document.getElementById('globalTemplatesDir').value || './templates';
+      state.template_dir = document.getElementById('globalTemplateDir').value || './templates';
       updateGlobalDisplay();
       closeGlobalModal();
     }
@@ -1064,7 +1056,6 @@
         monitor: state.monitor,
         template_dir: state.template_dir,
         keep_template: state.keep_template,
-        templates_dir: state.templates_dir,
         actions: state.actions.map(cleanAction),
       };
       const json = JSON.stringify(output, null, 4);

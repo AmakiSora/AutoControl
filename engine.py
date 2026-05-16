@@ -17,13 +17,12 @@ class ActionEngine:
         self.context = {}
         self.monitors = screen.get_monitors()
         self.default_monitor = config.get('monitor', 1)
-        self.template_dir = config.get('template_dir', '')
+        self.template_dir = config.get('template_dir', 'templates')
         self._url_cache = {}
         self.keep_template = config.get('keep_template', False)
-        self.templates_dir = config.get('templates_dir', './templates')
         
-        if self.keep_template and not os.path.exists(self.templates_dir):
-            os.makedirs(self.templates_dir, exist_ok=True)
+        if self.keep_template and not os.path.exists(self.template_dir):
+            os.makedirs(self.template_dir, exist_ok=True)
 
     def _resolve(self, value):
         if isinstance(value, (int, float)):
@@ -52,7 +51,7 @@ class ActionEngine:
             import hashlib
             url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
             filename = f'url_{url_hash}.png'
-            local_path = os.path.join(self.templates_dir, filename)
+            local_path = os.path.join(self.template_dir, filename)
             
             # 优先检查本地是否已有缓存
             if self.keep_template and os.path.exists(local_path):
