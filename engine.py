@@ -19,6 +19,11 @@ class ActionEngine:
         self.default_monitor = config.get('monitor', 1)
         self.template_dir = config.get('template_dir', '')
         self._url_cache = {}
+        self.keep_template = config.get('keep_template', False)
+        self.templates_dir = config.get('templates_dir', './templates')
+        
+        if self.keep_template and not os.path.exists(self.templates_dir):
+            os.makedirs(self.templates_dir, exist_ok=True)
 
     def _resolve(self, value):
         if isinstance(value, (int, float)):
@@ -41,13 +46,32 @@ class ActionEngine:
             return 0, 0
 
     def _download_template(self, url: str, timeout: int = 30) -> str | None:
-        """下载远程图片到临时文件"""
+        """下载远程图片到临时文件或本地 templates 目录"""
         try:
+            # 从 URL 生成文件名
+            import hashlib
+            url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
+            filename = f'url_{url_hash}.png'
+            local_path = os.path.join(self.templates_dir, filename)
+            
+            # 优先检查本地是否已有缓存
+            if self.keep_template and os.path.exists(local_path):
+                print(f"[CACHE] 使用本地缓存：{local_path}")
+                return local_path
+            
+            # 检查内存缓存
             if url in self._url_cache:
-                fd, path = tempfile.mkstemp(suffix='.png')
-                os.write(fd, self._url_cache[url])
-                os.close(fd)
-                return path
+                if self.keep_template:
+                    # 保存到本地目录
+                    with open(local_path, 'wb') as f:
+                        f.write(self._url_cache[url])
+                    print(f"[SAVE] 保存到本地：{local_path}")
+                    return local_path
+                else:
+                    fd, path = tempfile.mkstemp(suffix='.png')
+                    os.write(fd, self._url_cache[url])
+                    os.close(fd)
+                    return path
             
             # 添加 User-Agent 和 Referer 头，避免被服务器拒绝
             req = urllib.request.Request(url, headers={
@@ -69,10 +93,17 @@ class ActionEngine:
                 data = response.read()
                 self._url_cache[url] = data
                 
-                fd, path = tempfile.mkstemp(suffix='.png')
-                os.write(fd, data)
-                os.close(fd)
-                return path
+                if self.keep_template:
+                    # 保存到本地目录
+                    with open(local_path, 'wb') as f:
+                        f.write(data)
+                    print(f"[SAVE] 保存到本地：{local_path}")
+                    return local_path
+                else:
+                    fd, path = tempfile.mkstemp(suffix='.png')
+                    os.write(fd, data)
+                    os.close(fd)
+                    return path
                 
         except urllib.error.HTTPError as e:
             print(f"[ERROR] HTTP 错误：{url}, status={e.code}")
@@ -136,7 +167,8 @@ class ActionEngine:
 
                 time.sleep(retry)
         finally:
-            if is_url and temp_file and os.path.exists(temp_file):
+            # 仅在 keep_template=False 时删除临时文件
+            if is_url and temp_file and os.path.exists(temp_file) and not self.keep_template:
                 os.unlink(temp_file)
 
     def execute(self, action):
