@@ -918,7 +918,8 @@
 
       let html = `<div class="mt-4"><div class="text-sm font-medium mb-2">可用变量</div><div class="space-y-1">`;
       for (const v of vars) {
-        html += `<div class="text-xs font-mono text-muted-foreground bg-muted/50 px-2 py-1 rounded">{${v.id}.${v.field}}</div>`;
+        const varText = `{${v.id}.${v.field}}`;
+        html += `<div class="text-xs font-mono text-muted-foreground bg-muted/50 px-2 py-1 rounded cursor-pointer hover:bg-accent/10 hover:text-accent transition-colors" onclick="copyVariable('${varText}')" title="点击复制">${varText}</div>`;
       }
       html += `</div></div>`;
       return html;
@@ -1102,6 +1103,23 @@
           btn.innerHTML = originalText;
         }, 1500);
       });
+    }
+
+    function copyVariable(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast(`已复制：${text}`);
+      });
+    }
+
+    function showToast(message) {
+      const toast = document.createElement('div');
+      toast.className = 'fixed bottom-4 right-4 bg-foreground text-white px-4 py-2 rounded-lg shadow-lg text-sm z-50 transition-opacity duration-300';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 2000);
     }
 
     function importEditedJSON() {
