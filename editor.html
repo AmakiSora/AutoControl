@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>autoControl - 可视化编排编辑器</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: '#FAFAFA',
+            foreground: '#0F172A',
+            muted: '#F1F5F9',
+            'muted-foreground': '#64748B',
+            accent: '#0052FF',
+            'accent-secondary': '#4D7CFF',
+            border: '#E2E8F0',
+            card: '#FFFFFF',
+            'type-recognize': '#7C3AED',
+            'type-click': '#059669',
+            'type-move': '#2563EB',
+            'type-wait': '#D97706',
+            'type-group': '#DB2777',
+            'type-loop': '#DC2626',
+          },
+          fontFamily: {
+            ui: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', system-ui, sans-serif; background: #FAFAFA; color: #0F172A; }
+
+    .drag-over { background: #EFF6FF !important; border-color: #0052FF !important; border-style: dashed !important; }
+    .drag-over-top { border-top: 3px solid #0052FF !important; }
+    .drag-over-bottom { border-bottom: 3px solid #0052FF !important; }
+
+    .children-container { min-height: 36px; }
+    .children-container.drag-over { background: #DBEAFE; border-color: #0052FF; border-radius: 0.5rem; min-height: 48px; }
+
+    .action-item { cursor: grab; }
+    .action-item:active { cursor: grabbing; }
+    .action-item.selected { border-color: #0052FF; box-shadow: 0 0 0 2px rgba(0,82,255,0.2); }
+
+    .type-badge-recognize { background: #7C3AED; }
+    .type-badge-click { background: #059669; }
+    .type-badge-move { background: #2563EB; }
+    .type-badge-wait { background: #D97706; }
+    .type-badge-group { background: #DB2777; }
+    .type-badge-loop { background: #DC2626; }
+
+    .children-container { border-left: 2px dashed #E2E8F0; margin-left: 1.5rem; padding-left: 1rem; }
+
+    input[type="number"], input[type="text"], select {
+      height: 2.25rem;
+      padding: 0 0.75rem;
+      border: 1px solid #E2E8F0;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      background: white;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input[type="number"]:focus, input[type="text"]:focus, select:focus {
+      outline: none;
+      border-color: #0052FF;
+      box-shadow: 0 0 0 2px rgba(0,82,255,0.15);
+    }
+    input[type="number"]:active, input[type="text"]:active, select:active {
+      outline: none;
+    }
+
+    .scrollable { overflow-y: auto; }
+    .scrollable::-webkit-scrollbar { width: 6px; }
+    .scrollable::-webkit-scrollbar-track { background: transparent; }
+    .scrollable::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+    .scrollable::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body class="h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="h-14 bg-white border-b border-border flex items-center justify-between px-6 shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-accent-secondary flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      </div>
+      <h1 class="font-semibold text-lg">autoControl <span class="text-muted-foreground font-normal text-sm ml-2">可视化编排编辑器</span></h1>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="importJSON()" class="px-3 py-1.5 text-sm rounded-lg border border-border hover:border-accent/30 hover:shadow-sm transition-all">导入 JSON</button>
+      <button onclick="previewJSON()" class="px-3 py-1.5 text-sm rounded-lg border border-border hover:border-accent/30 hover:shadow-sm transition-all">预览 JSON</button>
+      <button onclick="exportJSON()" class="px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-accent to-accent-secondary text-white hover:shadow-accent transition-all">导出 JSON</button>
+      <button onclick="clearAll()" class="px-3 py-1.5 text-sm rounded-lg border border-border text-red-600 hover:border-red-300 hover:bg-red-50 transition-all">清空</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 flex overflow-hidden">
+
+    <!-- Left Panel: Action Palette -->
+    <aside class="w-56 bg-white border-r border-border flex flex-col shrink-0">
+      <div class="p-4 border-b border-border">
+        <h2 class="text-sm font-semibold text-muted-foreground uppercase tracking-wider">动作库</h2>
+        <p class="text-xs text-muted-foreground mt-1">拖拽到时间线添加</p>
+      </div>
+      <div class="p-3 space-y-2 scrollable flex-1">
+        <div class="action-palette-item p-3 rounded-xl border border-border bg-card hover:shadow-md transition-all cursor-grab" draggable="true" data-type="recognize">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg type-badge-recognize flex items-center justify-center">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </div>
+            <div>
+              <div class="text-sm font-medium">图像识别</div>
+              <div class="text-xs text-muted-foreground">recognize</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-palette-item p-3 rounded-xl border border-border bg-card hover:shadow-md transition-all cursor-grab" draggable="true" data-type="click">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg type-badge-click flex items-center justify-center">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/></svg>
+            </div>
+            <div>
+              <div class="text-sm font-medium">鼠标点击</div>
+              <div class="text-xs text-muted-foreground">click</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-palette-item p-3 rounded-xl border border-border bg-card hover:shadow-md transition-all cursor-grab" draggable="true" data-type="move">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg type-badge-move flex items-center justify-center">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/></svg>
+            </div>
+            <div>
+              <div class="text-sm font-medium">鼠标移动</div>
+              <div class="text-xs text-muted-foreground">move</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-palette-item p-3 rounded-xl border border-border bg-card hover:shadow-md transition-all cursor-grab" draggable="true" data-type="wait">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg type-badge-wait flex items-center justify-center">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div>
+              <div class="text-sm font-medium">等待</div>
+              <div class="text-xs text-muted-foreground">wait</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-palette-item p-3 rounded-xl border border-border bg-card hover:shadow-md transition-all cursor-grab" draggable="true" data-type="group">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg type-badge-group flex items-center justify-center">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </div>
+            <div>
+              <div class="text-sm font-medium">分组</div>
+              <div class="text-xs text-muted-foreground">group</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-palette-item p-3 rounded-xl border border-border bg-card hover:shadow-md transition-all cursor-grab" draggable="true" data-type="loop">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg type-badge-loop flex items-center justify-center">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            </div>
+            <div>
+              <div class="text-sm font-medium">循环</div>
+              <div class="text-xs text-muted-foreground">loop</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Center Panel: Timeline -->
+    <section class="flex-1 flex flex-col min-w-0">
+      <div class="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-muted-foreground uppercase tracking-wider">动作时间线</h2>
+        <div class="flex items-center gap-4 text-xs text-muted-foreground">
+          <span id="actionCount">0 个动作</span>
+          <span id="globalSettings" class="cursor-pointer text-accent hover:underline">全局设置: 显示器 <span id="displayMonitor">1</span> | 模板目录: <span id="displayTemplateDir">templates</span></span>
+        </div>
+      </div>
+
+      <div id="timeline" class="flex-1 p-6 scrollable" ondragover="handleTimelineDragOver(event)" ondrop="handleTimelineDrop(event)" ondragleave="handleTimelineDragLeave(event)">
+        <div id="emptyState" class="flex flex-col items-center justify-center h-full text-center">
+          <div class="w-20 h-20 rounded-2xl bg-muted flex items-center justify-center mb-6">
+            <svg class="w-10 h-10 text-muted-foreground/50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+          </div>
+          <h3 class="text-lg font-semibold mb-2">拖拽动作到这里开始编排</h3>
+          <p class="text-muted-foreground max-w-sm">从左侧动作库拖拽需要的动作到时间线，或导入已有的 JSON 配置进行修改</p>
+        </div>
+        <div id="actionList" class="space-y-2"></div>
+      </div>
+    </section>
+
+    <!-- Right Panel: Properties -->
+    <aside id="propertiesPanel" class="w-80 bg-white border-l border-border flex flex-col shrink-0" onclick="event.stopPropagation()">
+      <div class="p-4 border-b border-border">
+        <h2 class="text-sm font-semibold text-muted-foreground uppercase tracking-wider">属性编辑</h2>
+      </div>
+      <div id="propertiesContent" class="flex-1 p-4 scrollable">
+        <div class="text-center text-muted-foreground py-12">
+          <svg class="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+          <p class="text-sm">选择一个动作编辑属性</p>
+        </div>
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- Global Settings Modal -->
+  <div id="globalModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+      <h3 class="text-lg font-semibold mb-4">全局设置</h3>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">默认显示器编号</label>
+          <input type="number" id="globalMonitor" min="1" value="1" class="w-full">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">模板图片目录</label>
+          <input type="text" id="globalTemplateDir" value="templates" class="w-full">
+        </div>
+      </div>
+      <div class="flex justify-end gap-3 mt-6">
+        <button onclick="closeGlobalModal()" class="px-4 py-2 text-sm rounded-lg border border-border hover:bg-muted transition-all">取消</button>
+        <button onclick="saveGlobalSettings()" class="px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-accent to-accent-secondary text-white hover:shadow-accent transition-all">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JSON Preview Modal -->
+  <div id="jsonPreviewModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-3xl p-6 flex flex-col" style="max-height: 85vh;">
+      <h3 class="text-lg font-semibold mb-4">预览 JSON</h3>
+      <textarea id="jsonPreviewContent" class="w-full flex-1 font-mono text-sm p-4 bg-muted rounded-lg border border-border resize-none focus:outline-none focus:ring-2 focus:ring-accent/30" style="min-height: 400px;" spellcheck="false"></textarea>
+      <div id="jsonPreviewError" class="text-red-600 text-sm mt-2 hidden"></div>
+      <div class="flex justify-between gap-3 mt-4">
+        <button onclick="copyJSONToClipboard()" class="px-4 py-2 text-sm rounded-lg border border-border hover:bg-muted transition-all flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          复制
+        </button>
+        <div class="flex gap-3">
+          <button onclick="closeJsonPreviewModal()" class="px-4 py-2 text-sm rounded-lg border border-border hover:bg-muted transition-all">取消</button>
+          <button onclick="importEditedJSON()" class="px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-accent to-accent-secondary text-white hover:shadow-accent transition-all">确定导入</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ====== State ======
+    let state = {
+      monitor: 1,
+      template_dir: 'templates',
+      actions: [],
+      selectedId: null,
+      nextId: 1,
+    };
+
+    const ACTION_TYPES = {
+      recognize: { label: '图像识别', color: 'type-badge-recognize', icon: 'search' },
+      click: { label: '鼠标点击', color: 'type-badge-click', icon: 'click' },
+      move: { label: '鼠标移动', color: 'type-badge-move', icon: 'move' },
+      wait: { label: '等待', color: 'type-badge-wait', icon: 'wait' },
+      group: { label: '分组', color: 'type-badge-group', icon: 'group' },
+      loop: { label: '循环', color: 'type-badge-loop', icon: 'loop' },
+    };
+
+    // ====== Drag & Drop from Palette ======
+    let draggedType = null;
+    let draggedActionId = null;
+    let dropTargetId = null;
+    let dropPosition = null; // 'before', 'after', 'into'
+    let dropTargetContainer = null; // 'actions', 'on_success', 'on_failure'
+
+    document.querySelectorAll('.action-palette-item').forEach(item => {
+      item.addEventListener('dragstart', (e) => {
+        draggedType = item.dataset.type;
+        draggedActionId = null;
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('text/plain', item.dataset.type);
+      });
+      item.addEventListener('dragend', () => {
+        draggedType = null;
+        draggedActionId = null;
+        clearAllDropIndicators();
+      });
+    });
+
+    function createDefaultAction(type) {
+      const id = state.nextId++;
+      const base = { _uid: id, type };
+      switch (type) {
+        case 'recognize':
+          return { ...base, id: '', template: '', threshold: 0.8, monitor: state.monitor, retry_interval: 1, timeout: 30, on_success: [], on_failure: [] };
+        case 'click':
+          return { ...base, x: 0, y: 0, button: 'left' };
+        case 'move':
+          return { ...base, x: 0, y: 0 };
+        case 'wait':
+          return { ...base, duration: 1 };
+        case 'group':
+          return { ...base, actions: [] };
+        case 'loop':
+          return { ...base, count: 1, interval: 0, actions: [] };
+        default:
+          return base;
+      }
+    }
+
+    function handleTimelineDragOver(e) {
+      e.preventDefault();
+      if (!draggedType && !draggedActionId) return;
+      e.dataTransfer.dropEffect = draggedActionId ? 'move' : 'copy';
+
+      clearAllDropIndicators();
+
+      // Check if dropping into a children container
+      const childrenContainer = e.target.closest('.children-container');
+      if (childrenContainer && childrenContainer.dataset.parentUid) {
+        const parentUid = parseInt(childrenContainer.dataset.parentUid);
+        const containerType = childrenContainer.dataset.containerType || 'actions';
+        childrenContainer.classList.add('drag-over');
+        dropTargetId = parentUid;
+        dropPosition = 'into';
+        dropTargetContainer = containerType;
+        return;
+      }
+
+      const target = e.target.closest('.action-item');
+      if (target) {
+        const rect = target.getBoundingClientRect();
+        const y = e.clientY - rect.top;
+        const action = findActionByUid(parseInt(target.dataset.uid));
+
+        if (action && (action.type === 'group' || action.type === 'loop') && y > rect.height * 0.3 && y < rect.height * 0.8) {
+          target.classList.add('drag-over');
+          dropTargetId = parseInt(target.dataset.uid);
+          dropPosition = 'into';
+          dropTargetContainer = 'actions';
+        } else if (y < rect.height / 2) {
+          target.classList.add('drag-over-top');
+          dropTargetId = parseInt(target.dataset.uid);
+          dropPosition = 'before';
+          dropTargetContainer = null;
+        } else {
+          target.classList.add('drag-over-bottom');
+          dropTargetId = parseInt(target.dataset.uid);
+          dropPosition = 'after';
+          dropTargetContainer = null;
+        }
+      } else {
+        dropTargetId = null;
+        dropPosition = null;
+        dropTargetContainer = null;
+      }
+    }
+
+    function handleTimelineDragLeave(e) {
+      // Only clear if actually leaving the timeline area
+      if (!e.currentTarget.contains(e.relatedTarget)) {
+        clearAllDropIndicators();
+        dropTargetId = null;
+        dropPosition = null;
+      }
+    }
+
+    function handleTimelineDrop(e) {
+      e.preventDefault();
+      clearAllDropIndicators();
+
+      if (!draggedType && !draggedActionId) return;
+
+      if (draggedType) {
+        const newAction = createDefaultAction(draggedType);
+        if (dropTargetId) {
+          insertActionAt(newAction, dropTargetId, dropPosition, dropTargetContainer);
+        } else {
+          state.actions.push(newAction);
+        }
+      } else if (draggedActionId) {
+        moveAction(draggedActionId, dropTargetId, dropPosition);
+      }
+
+      draggedType = null;
+      draggedActionId = null;
+      dropTargetId = null;
+      dropPosition = null;
+      dropTargetContainer = null;
+      render();
+    }
+
+    function clearAllDropIndicators() {
+      document.querySelectorAll('.drag-over, .drag-over-top, .drag-over-bottom').forEach(el => {
+        el.classList.remove('drag-over', 'drag-over-top', 'drag-over-bottom');
+      });
+    }
+
+    // ====== Action Tree Operations ======
+    function findActionByUid(uid, actions = state.actions) {
+      for (const a of actions) {
+        if (a._uid === uid) return a;
+        if (a.actions) {
+          const found = findActionByUid(uid, a.actions);
+          if (found) return found;
+        }
+        if (a.on_success) {
+          const found = findActionByUid(uid, a.on_success);
+          if (found) return found;
+        }
+        if (a.on_failure) {
+          const found = findActionByUid(uid, a.on_failure);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    function findParentArray(uid, actions = state.actions, parent = null) {
+      for (let i = 0; i < actions.length; i++) {
+        if (actions[i]._uid === uid) return { array: actions, index: i };
+        if (actions[i].actions) {
+          const found = findParentArray(uid, actions[i].actions, actions[i]);
+          if (found) return found;
+        }
+        if (actions[i].on_success) {
+          const found = findParentArray(uid, actions[i].on_success, actions[i]);
+          if (found) return found;
+        }
+        if (actions[i].on_failure) {
+          const found = findParentArray(uid, actions[i].on_failure, actions[i]);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    function insertActionAt(newAction, targetUid, position, containerType = null) {
+      if (position === 'into') {
+        const target = findActionByUid(targetUid);
+        if (!target) return;
+
+        // Determine which array to push to
+        let targetArray;
+        if (containerType === 'on_success') {
+          targetArray = target.on_success;
+        } else if (containerType === 'on_failure') {
+          targetArray = target.on_failure;
+        } else {
+          targetArray = target.actions;
+        }
+
+        if (targetArray) {
+          targetArray.push(newAction);
+        }
+      } else {
+        const parent = findParentArray(targetUid);
+        if (parent) {
+          const idx = position === 'before' ? parent.index : parent.index + 1;
+          parent.array.splice(idx, 0, newAction);
+        } else {
+          state.actions.push(newAction);
+        }
+      }
+    }
+
+    function moveAction(sourceUid, targetUid, position) {
+      if (sourceUid === targetUid) return;
+      const sourceParent = findParentArray(sourceUid);
+      if (!sourceParent) return;
+
+      // Check if target is inside source (prevent circular)
+      const sourceAction = sourceParent.array[sourceParent.index];
+      if (isDescendant(sourceAction, targetUid)) return;
+
+      const [removed] = sourceParent.array.splice(sourceParent.index, 1);
+      insertActionAt(removed, targetUid, position);
+    }
+
+    function isDescendant(action, uid) {
+      if (!action) return false;
+      if (action._uid === uid) return true;
+      if (action.actions && action.actions.some(a => isDescendant(a, uid))) return true;
+      if (action.on_success && action.on_success.some(a => isDescendant(a, uid))) return true;
+      if (action.on_failure && action.on_failure.some(a => isDescendant(a, uid))) return true;
+      return false;
+    }
+
+    function removeAction(uid) {
+      const parent = findParentArray(uid);
+      if (parent) {
+        parent.array.splice(parent.index, 1);
+        if (state.selectedId === uid) state.selectedId = null;
+      }
+    }
+
+    // ====== Rendering ======
+    function render() {
+      const list = document.getElementById('actionList');
+      const empty = document.getElementById('emptyState');
+      const count = document.getElementById('actionCount');
+
+      const totalActions = countActions(state.actions);
+      count.textContent = `${totalActions} 个动作`;
+
+      if (totalActions === 0) {
+        empty.classList.remove('hidden');
+        list.innerHTML = '';
+        return;
+      }
+
+      empty.classList.add('hidden');
+      list.innerHTML = renderActions(state.actions);
+    }
+
+    function countActions(actions) {
+      let count = actions.length;
+      for (const a of actions) {
+        if (a.actions) count += countActions(a.actions);
+        if (a.on_success) count += countActions(a.on_success);
+        if (a.on_failure) count += countActions(a.on_failure);
+      }
+      return count;
+    }
+
+    function renderActions(actions, depth = 0) {
+      if (!actions || actions.length === 0) return '';
+
+      return actions.map(action => {
+        const typeInfo = ACTION_TYPES[action.type];
+        const isSelected = state.selectedId === action._uid;
+        const canHaveChildren = action.type === 'group' || action.type === 'loop' || action.type === 'recognize';
+        const hasChildren = (action.actions && action.actions.length > 0) ||
+                           (action.on_success && action.on_success.length > 0) ||
+                           (action.on_failure && action.on_failure.length > 0);
+
+        let html = `
+          <div class="action-item rounded-xl border ${isSelected ? 'selected' : 'border-border'} bg-card transition-all"
+               data-uid="${action._uid}"
+               draggable="true"
+               onclick="selectAction(${action._uid})"
+               ondragstart="handleActionDragStart(event, ${action._uid})"
+               ondragend="handleActionDragEnd(event)">
+
+            <div class="flex items-center gap-3 p-3" onclick="selectAction(${action._uid})">
+              <div class="cursor-grab text-muted-foreground/40 hover:text-muted-foreground">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>
+              </div>
+              <div class="w-7 h-7 rounded-lg ${typeInfo.color} flex items-center justify-center shrink-0">
+                ${getTypeIcon(action.type)}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium truncate">${getActionLabel(action)}</div>
+                <div class="text-xs text-muted-foreground font-mono">${action.type}${action.id ? ` [${action.id}]` : ''}</div>
+              </div>
+              <button onclick="event.stopPropagation(); removeAction(${action._uid}); render();" class="p-1 text-muted-foreground/40 hover:text-red-500 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            ${canHaveChildren ? renderChildren(action) : ''}
+          </div>
+        `;
+
+        return html;
+      }).join('');
+    }
+
+    function renderChildren(action) {
+      let html = '';
+
+      if (action.actions && action.actions.length > 0) {
+        html += `
+          <div class="children-container pb-2 space-y-2" data-parent-uid="${action._uid}" data-container-type="actions" onclick="event.stopPropagation()" ondragover="handleChildrenDragOver(event)" ondragleave="handleChildrenDragLeave(event)" ondrop="handleChildrenDrop(event)">
+            <div class="text-xs text-muted-foreground px-2 py-1 font-medium">子动作 (${action.actions.length})</div>
+            ${renderActions(action.actions)}
+          </div>
+        `;
+      } else if (action.type === 'group' || action.type === 'loop') {
+        html += `
+          <div class="children-container pb-2" data-parent-uid="${action._uid}" data-container-type="actions" onclick="event.stopPropagation()" ondragover="handleChildrenDragOver(event)" ondragleave="handleChildrenDragLeave(event)" ondrop="handleChildrenDrop(event)">
+            <div class="text-xs text-muted-foreground px-2 py-1 italic">拖拽动作到这里添加子动作</div>
+          </div>
+        `;
+      }
+
+      if (action.type === 'recognize') {
+        if (action.on_success && action.on_success.length > 0) {
+          html += `
+            <div class="children-container pb-2 space-y-2" data-parent-uid="${action._uid}" data-container-type="on_success" onclick="event.stopPropagation()" ondragover="handleChildrenDragOver(event)" ondragleave="handleChildrenDragLeave(event)" ondrop="handleChildrenDrop(event)">
+              <div class="text-xs text-emerald-600 px-2 py-1 font-medium">成功时执行 (${action.on_success.length})</div>
+              ${renderActions(action.on_success)}
+            </div>
+          `;
+        } else {
+          html += `
+            <div class="children-container pb-2" data-parent-uid="${action._uid}" data-container-type="on_success" onclick="event.stopPropagation()" ondragover="handleChildrenDragOver(event)" ondragleave="handleChildrenDragLeave(event)" ondrop="handleChildrenDrop(event)">
+              <div class="text-xs text-emerald-600/50 px-2 py-1 italic">拖拽动作到此处添加成功时执行</div>
+            </div>
+          `;
+        }
+        if (action.on_failure && action.on_failure.length > 0) {
+          html += `
+            <div class="children-container pb-2 space-y-2" data-parent-uid="${action._uid}" data-container-type="on_failure" onclick="event.stopPropagation()" ondragover="handleChildrenDragOver(event)" ondragleave="handleChildrenDragLeave(event)" ondrop="handleChildrenDrop(event)">
+              <div class="text-xs text-red-600 px-2 py-1 font-medium">失败时执行 (${action.on_failure.length})</div>
+              ${renderActions(action.on_failure)}
+            </div>
+          `;
+        } else {
+          html += `
+            <div class="children-container pb-2" data-parent-uid="${action._uid}" data-container-type="on_failure" onclick="event.stopPropagation()" ondragover="handleChildrenDragOver(event)" ondragleave="handleChildrenDragLeave(event)" ondrop="handleChildrenDrop(event)">
+              <div class="text-xs text-red-600/50 px-2 py-1 italic">拖拽动作到此处添加失败时执行</div>
+            </div>
+          `;
+        }
+      }
+
+      return html;
+    }
+
+    function handleChildrenDragOver(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!draggedType && !draggedActionId) return;
+      e.dataTransfer.dropEffect = draggedActionId ? 'move' : 'copy';
+      e.currentTarget.classList.add('drag-over');
+    }
+
+    function handleChildrenDragLeave(e) {
+      e.stopPropagation();
+      e.currentTarget.classList.remove('drag-over');
+    }
+
+    function handleChildrenDrop(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.classList.remove('drag-over');
+
+      if (!draggedType && !draggedActionId) return;
+
+      const parentUid = parseInt(e.currentTarget.dataset.parentUid);
+      const containerType = e.currentTarget.dataset.containerType || 'actions';
+
+      if (draggedType) {
+        const newAction = createDefaultAction(draggedType);
+        const target = findActionByUid(parentUid);
+        if (target) {
+          let targetArray;
+          if (containerType === 'on_success') {
+            targetArray = target.on_success;
+          } else if (containerType === 'on_failure') {
+            targetArray = target.on_failure;
+          } else {
+            targetArray = target.actions;
+          }
+          if (targetArray) {
+            targetArray.push(newAction);
+          }
+        }
+      } else if (draggedActionId) {
+        const sourceParent = findParentArray(draggedActionId);
+        if (sourceParent) {
+          const sourceAction = sourceParent.array[sourceParent.index];
+          if (!isDescendant(sourceAction, parentUid)) {
+            const [removed] = sourceParent.array.splice(sourceParent.index, 1);
+            const target = findActionByUid(parentUid);
+            if (target) {
+              let targetArray;
+              if (containerType === 'on_success') {
+                targetArray = target.on_success;
+              } else if (containerType === 'on_failure') {
+                targetArray = target.on_failure;
+              } else {
+                targetArray = target.actions;
+              }
+              if (targetArray) {
+                targetArray.push(removed);
+              }
+            }
+          }
+        }
+      }
+
+      draggedType = null;
+      draggedActionId = null;
+      dropTargetId = null;
+      dropPosition = null;
+      dropTargetContainer = null;
+      render();
+    }
+
+    function getTypeIcon(type) {
+      const icons = {
+        recognize: '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>',
+        click: '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/></svg>',
+        move: '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>',
+        wait: '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+        group: '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>',
+        loop: '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>',
+      };
+      return icons[type] || '';
+    }
+
+    function getActionLabel(action) {
+      switch (action.type) {
+        case 'recognize': return action.template || '选择模板图片...';
+        case 'click': return `点击 (${action.x}, ${action.y}) ${action.button === 'left' ? '左键' : '右键'}`;
+        case 'move': return `移动到 (${action.x}, ${action.y})`;
+        case 'wait': return `等待 ${action.duration} 秒`;
+        case 'group': return `分组 (${action.actions?.length || 0} 个子动作)`;
+        case 'loop': return `循环 ${action.count} 次`;
+        default: return action.type;
+      }
+    }
+
+    // ====== Action Drag within Timeline ======
+    function handleActionDragStart(e, uid) {
+      draggedActionId = uid;
+      draggedType = null;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', uid);
+      e.stopPropagation();
+    }
+
+    function handleActionDragEnd(e) {
+      draggedActionId = null;
+      clearAllDropIndicators();
+    }
+
+    // ====== Selection & Properties ======
+    function selectAction(uid) {
+      state.selectedId = uid;
+      render();
+      renderProperties();
+    }
+
+    function renderProperties() {
+      const container = document.getElementById('propertiesContent');
+      if (!state.selectedId) {
+        container.innerHTML = `
+          <div class="text-center text-muted-foreground py-12">
+            <svg class="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+            <p class="text-sm">选择一个动作编辑属性</p>
+          </div>
+        `;
+        return;
+      }
+
+      const action = findActionByUid(state.selectedId);
+      if (!action) return;
+
+      let html = `<div class="space-y-4">`;
+      html += `<div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg ${ACTION_TYPES[action.type].color} text-white text-xs font-medium">${ACTION_TYPES[action.type].label}</div>`;
+
+      switch (action.type) {
+        case 'recognize':
+          html += propertyField('id', '动作标识 (ID)', 'text', action.id || '', '用于变量引用');
+          html += propertyField('template', '模板图片路径', 'text', action.template || '', '相对或绝对路径');
+          html += propertyField('threshold', '匹配阈值', 'number', action.threshold, '0.0 ~ 1.0', { min: 0, max: 1, step: 0.05 });
+          html += propertyField('monitor', '显示器编号', 'number', action.monitor, '', { min: 1 });
+          html += propertyField('retry_interval', '重试间隔 (秒)', 'number', action.retry_interval, '0 = 不重试', { min: 0, step: 0.1 });
+          html += propertyField('timeout', '超时 (秒)', 'number', action.timeout, '0 = 单次检测', { min: 0, step: 1 });
+          html += availableVariables();
+          break;
+
+        case 'click':
+          html += propertyField('x', 'X 坐标', 'text', action.x, '支持变量引用 {id.center_x}');
+          html += propertyField('y', 'Y 坐标', 'text', action.y, '支持变量引用 {id.center_y}');
+          html += `
+            <div>
+              <label class="block text-sm font-medium mb-1">按键</label>
+              <select onchange="updateProperty('button', this.value)" onclick="event.stopPropagation()" class="w-full">
+                <option value="left" ${action.button === 'left' ? 'selected' : ''}>左键</option>
+                <option value="right" ${action.button === 'right' ? 'selected' : ''}>右键</option>
+              </select>
+            </div>
+          `;
+          html += availableVariables();
+          break;
+
+        case 'move':
+          html += propertyField('x', 'X 坐标', 'text', action.x, '支持变量引用');
+          html += propertyField('y', 'Y 坐标', 'text', action.y, '支持变量引用');
+          html += availableVariables();
+          break;
+
+        case 'wait':
+          html += propertyField('duration', '等待秒数', 'number', action.duration, '', { min: 0, step: 0.1 });
+          break;
+
+        case 'group':
+          html += `<div class="text-sm text-muted-foreground">包含 ${action.actions?.length || 0} 个子动作，在时间线中拖拽添加</div>`;
+          break;
+
+        case 'loop':
+          html += propertyField('count', '循环次数', 'number', action.count, '', { min: 1 });
+          html += propertyField('interval', '每轮间隔 (秒)', 'number', action.interval, '0 = 无间隔', { min: 0, step: 0.1 });
+          html += `<div class="text-sm text-muted-foreground">包含 ${action.actions?.length || 0} 个子动作</div>`;
+          break;
+      }
+
+      html += `</div>`;
+      container.innerHTML = html;
+    }
+
+    function propertyField(name, label, type, value, hint, attrs = {}) {
+      const displayValue = value !== undefined && value !== null ? value : '';
+      const inputAttrs = Object.entries(attrs).map(([k, v]) => `${k}="${v}"`).join(' ');
+      return `
+        <div>
+          <label class="block text-sm font-medium mb-1">${label}</label>
+          <input type="${type}" value="${displayValue}" ${inputAttrs} oninput="updateProperty('${name}', this.type === 'number' ? parseFloat(this.value) : this.value)" onclick="event.stopPropagation()" class="w-full font-mono text-sm">
+          ${hint ? `<div class="text-xs text-muted-foreground mt-1">${hint}</div>` : ''}
+        </div>
+      `;
+    }
+
+    function updateProperty(name, value) {
+      const action = findActionByUid(state.selectedId);
+      if (!action) return;
+      action[name] = value;
+      render();
+    }
+
+    function availableVariables() {
+      const vars = getAvailableVariables();
+      if (vars.length === 0) {
+        return `<div class="mt-4 p-3 rounded-lg bg-muted/50"><div class="text-xs text-muted-foreground">暂无可用变量。先设置识别动作的 ID 后可在此引用。</div></div>`;
+      }
+
+      let html = `<div class="mt-4"><div class="text-sm font-medium mb-2">可用变量</div><div class="space-y-1">`;
+      for (const v of vars) {
+        html += `<div class="text-xs font-mono text-muted-foreground bg-muted/50 px-2 py-1 rounded">{${v.id}.${v.field}}</div>`;
+      }
+      html += `</div></div>`;
+      return html;
+    }
+
+    function getAvailableVariables(actions = state.actions, vars = []) {
+      for (const a of actions) {
+        if (a.type === 'recognize' && a.id) {
+          vars.push({ id: a.id, field: 'center_x' });
+          vars.push({ id: a.id, field: 'center_y' });
+          vars.push({ id: a.id, field: 'confidence' });
+          vars.push({ id: a.id, field: 'found' });
+        }
+        if (a.actions) getAvailableVariables(a.actions, vars);
+        if (a.on_success) getAvailableVariables(a.on_success, vars);
+        if (a.on_failure) getAvailableVariables(a.on_failure, vars);
+      }
+      return vars;
+    }
+
+    // ====== JSON Import/Export ======
+    function cleanAction(action) {
+      const clean = { ...action };
+      delete clean._uid;
+
+      if (clean.actions) {
+        clean.actions = clean.actions.map(cleanAction);
+      }
+      if (clean.on_success) {
+        clean.on_success = clean.on_success.map(cleanAction);
+      }
+      if (clean.on_failure) {
+        clean.on_failure = clean.on_failure.map(cleanAction);
+      }
+
+      // Remove defaults for recognize
+      if (clean.type === 'recognize') {
+        if (clean.threshold === 0.8 && clean.retry_interval === 1 && clean.timeout === 30 && clean.monitor === state.monitor) {
+          // Keep essential fields only
+        }
+      }
+
+      return clean;
+    }
+
+    function exportJSON() {
+      const output = {
+        monitor: state.monitor,
+        template_dir: state.template_dir,
+        actions: state.actions.map(cleanAction),
+      };
+
+      const json = JSON.stringify(output, null, 4);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'actions.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importJSON() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          try {
+            const data = JSON.parse(ev.target.result);
+            loadFromJSON(data);
+          } catch (err) {
+            alert('JSON 解析失败: ' + err.message);
+          }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    }
+
+    function loadFromJSON(data) {
+      state.monitor = data.monitor || 1;
+      state.template_dir = data.template_dir || 'templates';
+      state.actions = data.actions || [];
+      state.selectedId = null;
+
+      // Assign _uid to all actions
+      let maxUid = 0;
+      function assignUids(actions) {
+        for (const a of actions) {
+          if (!a._uid) {
+            maxUid++;
+            a._uid = maxUid;
+          } else {
+            maxUid = Math.max(maxUid, a._uid);
+          }
+          if (a.actions) assignUids(a.actions);
+          if (a.on_success) assignUids(a.on_success);
+          if (a.on_failure) assignUids(a.on_failure);
+        }
+      }
+      assignUids(state.actions);
+      state.nextId = maxUid + 1;
+
+      updateGlobalDisplay();
+      render();
+      renderProperties();
+    }
+
+    function clearAll() {
+      if (state.actions.length === 0) return;
+      if (!confirm('确定要清空所有动作吗？')) return;
+      state.actions = [];
+      state.selectedId = null;
+      render();
+      renderProperties();
+    }
+
+    // ====== Global Settings ======
+    function updateGlobalDisplay() {
+      document.getElementById('displayMonitor').textContent = state.monitor;
+      document.getElementById('displayTemplateDir').textContent = state.template_dir;
+    }
+
+    document.getElementById('globalSettings').addEventListener('click', () => {
+      document.getElementById('globalMonitor').value = state.monitor;
+      document.getElementById('globalTemplateDir').value = state.template_dir;
+      document.getElementById('globalModal').classList.remove('hidden');
+      document.getElementById('globalModal').classList.add('flex');
+    });
+
+    function closeGlobalModal() {
+      document.getElementById('globalModal').classList.add('hidden');
+      document.getElementById('globalModal').classList.remove('flex');
+    }
+
+    function saveGlobalSettings() {
+      state.monitor = parseInt(document.getElementById('globalMonitor').value) || 1;
+      state.template_dir = document.getElementById('globalTemplateDir').value || 'templates';
+      updateGlobalDisplay();
+      closeGlobalModal();
+    }
+
+    // ====== JSON Preview ======
+    function previewJSON() {
+      const output = {
+        monitor: state.monitor,
+        template_dir: state.template_dir,
+        actions: state.actions.map(cleanAction),
+      };
+      const json = JSON.stringify(output, null, 4);
+      document.getElementById('jsonPreviewContent').value = json;
+      document.getElementById('jsonPreviewError').classList.add('hidden');
+      document.getElementById('jsonPreviewModal').classList.remove('hidden');
+      document.getElementById('jsonPreviewModal').classList.add('flex');
+    }
+
+    function closeJsonPreviewModal() {
+      document.getElementById('jsonPreviewModal').classList.add('hidden');
+      document.getElementById('jsonPreviewModal').classList.remove('flex');
+    }
+
+    function copyJSONToClipboard() {
+      const textarea = document.getElementById('jsonPreviewContent');
+      navigator.clipboard.writeText(textarea.value).then(() => {
+        const btn = event.target.closest('button');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>已复制';
+        setTimeout(() => {
+          btn.innerHTML = originalText;
+        }, 1500);
+      });
+    }
+
+    function importEditedJSON() {
+      const textarea = document.getElementById('jsonPreviewContent');
+      const errorEl = document.getElementById('jsonPreviewError');
+      try {
+        const data = JSON.parse(textarea.value);
+        loadFromJSON(data);
+        closeJsonPreviewModal();
+      } catch (err) {
+        errorEl.textContent = 'JSON 格式错误: ' + err.message;
+        errorEl.classList.remove('hidden');
+      }
+    }
+
+    // ====== Keyboard Shortcuts ======
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        exportJSON();
+      }
+    });
+
+    // ====== Init ======
+    updateGlobalDisplay();
+    render();
+  </script>
+</body>
+</html>
