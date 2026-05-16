@@ -49,10 +49,22 @@ class ActionEngine:
                 os.close(fd)
                 return path
             
-            with urllib.request.urlopen(url, timeout=timeout) as response:
+            # 添加 User-Agent 和 Referer 头，避免被服务器拒绝
+            req = urllib.request.Request(url, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                'Referer': 'https://' + url.split('/')[2] if url.startswith('https://') else 'http://' + url.split('/')[2]
+            })
+            
+            with urllib.request.urlopen(req, timeout=timeout) as response:
                 if response.status != 200:
                     print(f"[ERROR] URL 返回非 200 状态码：{url}, status={response.status}")
                     return None
+                
+                content_type = response.getheader('Content-Type', '')
+                if not content_type.startswith('image/'):
+                    print(f"[WARNING] URL 返回非图片内容：{url}, Content-Type={content_type}")
                 
                 data = response.read()
                 self._url_cache[url] = data
