@@ -27,6 +27,7 @@
             'type-wait': '#D97706',
             'type-group': '#DB2777',
             'type-loop': '#DC2626',
+            'type-keyboard': '#0891B2',
           },
           fontFamily: {
             ui: ['Inter', 'system-ui', 'sans-serif'],
@@ -57,6 +58,7 @@
     .type-badge-wait { background: #D97706; }
     .type-badge-group { background: #DB2777; }
     .type-badge-loop { background: #DC2626; }
+    .type-badge-keyboard { background: #0891B2; }
 
     .children-container { border-left: 2px dashed #E2E8F0; margin-left: 1.5rem; padding-left: 1rem; }
 
@@ -191,6 +193,18 @@
             </div>
           </div>
         </div>
+
+        <div class="action-palette-item p-3 rounded-xl border border-border bg-card hover:shadow-md transition-all cursor-grab" draggable="true" data-type="keyboard">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg type-badge-keyboard flex items-center justify-center">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 12h4m-4 4h4"/></svg>
+            </div>
+            <div>
+              <div class="text-sm font-medium">键盘输入</div>
+              <div class="text-xs text-muted-foreground">keyboard</div>
+            </div>
+          </div>
+        </div>
       </div>
     </aside>
 
@@ -297,6 +311,7 @@
       wait: { label: '等待', color: 'type-badge-wait', icon: 'wait' },
       group: { label: '分组', color: 'type-badge-group', icon: 'group' },
       loop: { label: '循环', color: 'type-badge-loop', icon: 'loop' },
+      keyboard: { label: '键盘输入', color: 'type-badge-keyboard', icon: 'keyboard' },
     };
 
     // ====== Drag & Drop from Palette ======
@@ -730,6 +745,7 @@
         wait: '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
         group: '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>',
         loop: '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>',
+        keyboard: '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 12h4m-4 4h4"/></svg>',
       };
       return icons[type] || '';
     }
@@ -742,6 +758,7 @@
         case 'wait': return `等待 ${action.duration} 秒`;
         case 'group': return `分组 (${action.actions?.length || 0} 个子动作)`;
         case 'loop': return `循环 ${action.count} 次`;
+        case 'keyboard': return `键盘输入：${action.keys || ''}`;
         default: return action.type;
       }
     }
@@ -836,6 +853,11 @@
           html += propertyField('count', '循环次数', 'number', action.count, '', { min: 1 });
           html += propertyField('interval', '每轮间隔 (秒)', 'number', action.interval, '0 = 无间隔', { min: 0, step: 0.1 });
           html += `<div class="text-sm text-muted-foreground">包含 ${action.actions?.length || 0} 个子动作</div>`;
+          break;
+
+        case 'keyboard':
+          html += propertyField('keys', '按键 / 文本', 'text', action.keys, '单字符、字符串或数组如 ["ctrl", "s"]');
+          html += propertyField('duration', '每个按键持续时间 (秒)', 'number', action.duration, '默认 0.1', { min: 0, step: 0.01 });
           break;
       }
 

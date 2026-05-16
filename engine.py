@@ -8,6 +8,7 @@ import urllib.error
 import mouse
 import screen
 import template
+import keyboard
 
 VAR_PATTERN = re.compile(r'\{(\w+)\.(\w+)\}')
 
@@ -216,6 +217,13 @@ class ActionEngine:
                     self.execute(s)
                 if interval and i < count - 1:
                     time.sleep(interval)
+
+        elif atype == 'keyboard':
+            keys = action.get('keys', '')
+            duration = action.get('duration', 0.1)
+            keys_resolved = self._resolve(keys) if isinstance(keys, str) else keys
+            print(f"[KEYBOARD] 输入：{keys_resolved}")
+            keyboard.send_keys(keys_resolved, duration)
 
         if aid and result is not None:
             self.context[aid] = result

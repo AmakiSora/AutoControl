@@ -27,6 +27,7 @@ python main.py actions.json
 ```
 autoControl/
 ├── mouse.py           # 硬件级鼠标控制 (Win32 SendInput)
+├── keyboard.py        # 硬件级键盘控制 (Win32 SendInput)
 ├── screen.py          # 多显示器截图 (mss)
 ├── template.py        # 图像模板匹配 (OpenCV)
 ├── engine.py          # 事件引擎 — 读取 JSON 编排并执行
@@ -42,6 +43,7 @@ autoControl/
 | 模块 | 职责 |
 |---|---|
 | `mouse.py` | 通过 Win32 `SendInput` API 实现硬件级鼠标移动、左/右键点击 |
+| `keyboard.py` | 通过 Win32 `SendInput` API 实现硬件级键盘输入、组合键 |
 | `screen.py` | 基于 `mss` 的多显示器截图，支持指定显示器捕获，坐标全局转换 |
 | `template.py` | OpenCV 模板匹配，支持中文路径，返回匹配位置与置信度 |
 | `engine.py` | `ActionEngine` 类，读取 JSON 配置，按顺序执行动作，支持变量引用 |
@@ -176,6 +178,37 @@ autoControl/
 | `count` | number | 1 | 循环次数 |
 | `interval` | number | 0 | 每轮间隔（秒） |
 
+### keyboard — 键盘输入
+
+```json
+{
+    "type": "keyboard",
+    "keys": ["ctrl", "s"],
+    "duration": 0.1
+}
+```
+
+| 字段 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `keys` | string/string[] | - | 单个字符、字符串或按键数组 |
+| `duration` | number | 0.1 | 每个按键持续时间（秒） |
+
+**keys 字段格式说明：**
+
+- **单字符串**：`"Hello"` — 依次输入 H-e-l-l-o
+- **组合键**：`["ctrl", "s"]` — 按下 Ctrl+S
+- **修饰键 + 文本**：`["shift", "hello"]` — 按住 Shift 输入 hello
+
+**支持的按键：**
+
+- **字母**：`a`-`z`
+- **数字**：`0`-`9`
+- **修饰键**：`ctrl`、`alt`、`shift`、`win`
+- **功能键**：`f1`-`f12`
+- **特殊键**：`enter`、`escape`、`tab`、`backspace`、`delete`、`space`
+- **方向键**：`up`、`down`、`left`、`right`
+- **导航键**：`home`、`end`、`pageup`、`pagedown`
+
 ## 变量引用系统
 
 识别动作设置 `id` 后会产生以下变量：
@@ -206,6 +239,15 @@ autoControl/
 
 所有动作执行时自动打印日志（无需额外配置）：
 
+```
+[CLICK] (800, 600) 左键
+[MOVE] → (100, 200)
+[KEYBOARD] 输入：Hello World
+[RECOGNIZE] 搜索模板：search.jpg
+  → ✓ 找到，坐标=(800, 600), 置信度=85.00%
+[WAIT] 2 秒
+[GROUP] 开始执行 3 个子动作
+[LOOP] 第 2/5 轮
 ```
 [CLICK] (800, 600) 左键
 [MOVE] → (100, 200)
