@@ -84,6 +84,9 @@
     .scrollable::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
     .scrollable::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 
+    #propertiesPanel { min-width: 320px; }
+    #propertiesContent img { background: white; border-radius: 4px; }
+
     @media (prefers-reduced-motion: reduce) {
       * { transition: none !important; }
     }
@@ -776,7 +779,14 @@
       switch (action.type) {
         case 'recognize':
           html += propertyField('id', '动作标识 (ID)', 'text', action.id || '', '用于变量引用');
-          html += propertyField('template', '模板图片路径', 'text', action.template || '', '相对或绝对路径');
+          html += `
+            <div>
+              <label class="block text-sm font-medium mb-1">模板图片路径</label>
+              <input type="text" value="${action.template || ''}" oninput="updateProperty('template', this.value)" onclick="event.stopPropagation()" class="w-full font-mono text-sm">
+              <div class="text-xs text-muted-foreground mt-1">相对或绝对路径，或 http/https 外链</div>
+              ${renderImagePreview(action.template)}
+            </div>
+          `;
           html += propertyField('threshold', '匹配阈值', 'number', action.threshold, '0.0 ~ 1.0', { min: 0, max: 1, step: 0.05 });
           html += propertyField('monitor', '显示器编号', 'number', action.monitor, '', { min: 1 });
           html += propertyField('retry_interval', '重试间隔 (秒)', 'number', action.retry_interval, '0 = 不重试', { min: 0, step: 0.1 });
@@ -834,6 +844,32 @@
           ${hint ? `<div class="text-xs text-muted-foreground mt-1">${hint}</div>` : ''}
         </div>
       `;
+    }
+
+    function renderImagePreview(templatePath) {
+      if (!templatePath) {
+        return '<div class="mt-3 rounded-lg bg-muted/50 border-2 border-dashed border-border p-8 text-center"><div class="text-sm text-muted-foreground">请输入图片路径或 URL</div></div>';
+      }
+
+      const isUrl = templatePath.startsWith('http://') || templatePath.startsWith('https://');
+      const imageSrc = isUrl ? templatePath : `file://${templatePath}`;
+      
+      return `
+        <div class="mt-3 rounded-lg bg-muted/50 border-2 border-dashed border-border p-4">
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-xs font-medium ${isUrl ? 'text-accent' : 'text-muted-foreground'}">${isUrl ? '外链图片' : '本地图片'}</div>
+            <button onclick="refreshImagePreview()" class="text-xs text-accent hover:underline">刷新预览</button>
+          </div>
+          <div class="flex items-center justify-center" style="max-height: 200px; overflow: hidden;">
+            <img src="${imageSrc}" alt="模板预览" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'text-sm text-red-500\\'>图片加载失败</div>'" style="max-width: 100%; max-height: 200px; object-fit: contain;" />
+          </div>
+          <div class="text-xs text-muted-foreground mt-2 truncate">${templatePath}</div>
+        </div>
+      `;
+    }
+
+    function refreshImagePreview() {
+      renderProperties();
     }
 
     function updateProperty(name, value) {

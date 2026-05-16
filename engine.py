@@ -1,6 +1,9 @@
 import os
 import time
 import re
+import tempfile
+import urllib.request
+import urllib.error
 
 import mouse
 import screen
@@ -15,6 +18,7 @@ class ActionEngine:
         self.monitors = screen.get_monitors()
         self.default_monitor = config.get('monitor', 1)
         self.template_dir = config.get('template_dir', '')
+        self._url_cache = {}
 
     def _resolve(self, value):
         if isinstance(value, (int, float)):
@@ -36,8 +40,51 @@ class ActionEngine:
             print(f"[ERROR] Invalid coordinates: x={action.get('x')}, y={action.get('y')}")
             return 0, 0
 
+    def _download_template(self, url: str, timeout: int = 30) -> str | None:
+        """下载远程图片到临时文件"""
+        try:
+            if url in self._url_cache:
+                fd, path = tempfile.mkstemp(suffix='.png')
+                os.write(fd, self._url_cache[url])
+                os.close(fd)
+                return path
+            
+            with urllib.request.urlopen(url, timeout=timeout) as response:
+                if response.status != 200:
+                    print(f"[ERROR] URL 返回非 200 状态码：{url}, status={response.status}")
+                    return None
+                
+                data = response.read()
+                self._url_cache[url] = data
+                
+                fd, path = tempfile.mkstemp(suffix='.png')
+                os.write(fd, data)
+                os.close(fd)
+                return path
+                
+        except urllib.error.HTTPError as e:
+            print(f"[ERROR] HTTP 错误：{url}, status={e.code}")
+            return None
+        except urllib.error.URLError as e:
+            print(f"[ERROR] URL 错误：{url}, reason={e.reason}")
+            return None
+        except Exception as e:
+            print(f"[ERROR] 下载失败：{url}, {e}")
+            return None
+
     def _exec_recognize(self, action):
         template_path = self._resolve(action['template'])
+        is_url = template_path.startswith(('http://', 'https://'))
+        temp_file = None
+        
+        if is_url:
+            timeout = int(action.get('download_timeout', 30))
+            print(f"[DOWNLOAD] 从 URL 下载模板：{template_path}, timeout={timeout}s")
+            temp_file = self._download_template(template_path, timeout)
+            if temp_file is None:
+                return {'found': False}
+            template_path = temp_file
+        
         if not os.path.isabs(template_path):
             template_path = os.path.join(self.template_dir, template_path)
 
@@ -46,35 +93,39 @@ class ActionEngine:
         retry = float(action.get('retry_interval', 0))
         timeout = float(action.get('timeout', 0))
 
-        tmpl = template.load(template_path)
-        if tmpl is None:
-            print(f"[ERROR] Load template failed: {template_path}")
-            return {'found': False}
-
-        template_gray, tw, th = tmpl
-        start = time.time()
-
-        while True:
-            _, img_gray, mon = screen.capture_monitor(monitor_idx)
-            match = template.find(img_gray, template_gray, tw, th, threshold)
-
-            if match:
-                gx, gy = screen.to_global(mon, match['center_x'], match['center_y'])
-                return {
-                    'found': True,
-                    'center_x': gx,
-                    'center_y': gy,
-                    'confidence': match['confidence'],
-                }
-
-            if timeout <= 0:
+        try:
+            tmpl = template.load(template_path)
+            if tmpl is None:
+                print(f"[ERROR] Load template failed: {template_path}")
                 return {'found': False}
 
-            if time.time() - start >= timeout:
-                print(f"[TIMEOUT] {template_path} not found within {timeout}s")
-                return {'found': False}
+            template_gray, tw, th = tmpl
+            start = time.time()
 
-            time.sleep(retry)
+            while True:
+                _, img_gray, mon = screen.capture_monitor(monitor_idx)
+                match = template.find(img_gray, template_gray, tw, th, threshold)
+
+                if match:
+                    gx, gy = screen.to_global(mon, match['center_x'], match['center_y'])
+                    return {
+                        'found': True,
+                        'center_x': gx,
+                        'center_y': gy,
+                        'confidence': match['confidence'],
+                    }
+
+                if timeout <= 0:
+                    return {'found': False}
+
+                if time.time() - start >= timeout:
+                    print(f"[TIMEOUT] {template_path} not found within {timeout}s")
+                    return {'found': False}
+
+                time.sleep(retry)
+        finally:
+            if is_url and temp_file and os.path.exists(temp_file):
+                os.unlink(temp_file)
 
     def execute(self, action):
         atype = action['type']
