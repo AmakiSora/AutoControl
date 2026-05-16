@@ -220,7 +220,7 @@ def send_keys(keys, duration=0.1):
             if vk:
                 tap_key(vk, duration)
 
-        # 释放修饰键asdasd
+        # 释放修饰键
         for mod in reversed(modifiers):
             vk = _get_vk_code(mod)
             if vk:
