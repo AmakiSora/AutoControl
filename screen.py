@@ -20,3 +20,14 @@ def capture_monitor(monitor_index):
 
 def to_global(monitor, rel_x, rel_y):
     return monitor['left'] + rel_x, monitor['top'] + rel_y
+
+
+def capture_region(left, top, width, height):
+    """捕获指定区域的截图"""
+    with mss.mss() as sct:
+        region = {'left': left, 'top': top, 'width': width, 'height': height}
+        screenshot = sct.grab(region)
+        img = np.array(screenshot)
+        img_bgr = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+        img_gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+        return img_bgr, img_gray

@@ -119,7 +119,7 @@ class ActionEngine:
         template_path = self._resolve(action['template'])
         is_url = template_path.startswith(('http://', 'https://'))
         temp_file = None
-        
+
         if is_url:
             timeout = int(action.get('download_timeout', 30))
             print(f"[DOWNLOAD] 从 URL 下载模板：{template_path}, timeout={timeout}s")
@@ -134,6 +134,7 @@ class ActionEngine:
         monitor_idx = int(action.get('monitor', self.default_monitor))
         retry = float(action.get('retry_interval', 0))
         timeout = float(action.get('timeout', 0))
+        region = action.get('region')
 
         try:
             tmpl = template.load(template_path)
@@ -145,17 +146,34 @@ class ActionEngine:
             start = time.time()
 
             while True:
-                _, img_gray, mon = screen.capture_monitor(monitor_idx)
-                match = template.find(img_gray, template_gray, tw, th, threshold)
-
-                if match:
-                    gx, gy = screen.to_global(mon, match['center_x'], match['center_y'])
-                    return {
-                        'found': True,
-                        'center_x': gx,
-                        'center_y': gy,
-                        'confidence': match['confidence'],
-                    }
+                if region:
+                    left = int(self._resolve(region.get('x', 0)))
+                    top = int(self._resolve(region.get('y', 0)))
+                    width = int(self._resolve(region.get('width', 0)))
+                    height = int(self._resolve(region.get('height', 0)))
+                    print(f"[REGION] 限定区域: ({left}, {top}, {width}, {height})")
+                    _, img_gray = screen.capture_region(left, top, width, height)
+                    match = template.find(img_gray, template_gray, tw, th, threshold)
+                    if match:
+                        gx = left + match['center_x']
+                        gy = top + match['center_y']
+                        return {
+                            'found': True,
+                            'center_x': gx,
+                            'center_y': gy,
+                            'confidence': match['confidence'],
+                        }
+                else:
+                    _, img_gray, mon = screen.capture_monitor(monitor_idx)
+                    match = template.find(img_gray, template_gray, tw, th, threshold)
+                    if match:
+                        gx, gy = screen.to_global(mon, match['center_x'], match['center_y'])
+                        return {
+                            'found': True,
+                            'center_x': gx,
+                            'center_y': gy,
+                            'confidence': match['confidence'],
+                        }
 
                 if timeout <= 0:
                     return {'found': False}

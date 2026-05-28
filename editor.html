@@ -273,6 +273,17 @@
     </div>
   </div>
 
+  <!-- Region Picker Overlay -->
+  <div id="regionPickerOverlay" class="fixed inset-0 hidden z-[100]" style="cursor: crosshair;">
+    <div class="absolute inset-0 bg-black/20"></div>
+    <div id="regionPickerBox" class="absolute border-2 border-accent bg-accent/10 hidden" style="pointer-events: none;">
+      <div class="absolute -top-7 left-0 bg-accent text-white text-xs px-2 py-0.5 rounded whitespace-nowrap font-mono" id="regionPickerInfo">0, 0 | 0 x 0</div>
+    </div>
+    <div class="absolute top-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-lg text-sm font-medium" id="regionPickerHint">
+      拖拽鼠标绘制区域，松开确认，按 ESC 取消
+    </div>
+  </div>
+
   <!-- JSON Preview Modal -->
   <div id="jsonPreviewModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
     <div class="bg-white rounded-2xl shadow-xl w-full max-w-3xl p-6 flex flex-col" style="max-height: 85vh;">
@@ -752,7 +763,13 @@
 
     function getActionLabel(action) {
       switch (action.type) {
-        case 'recognize': return action.template || '选择模板图片...';
+        case 'recognize': {
+          let label = action.template || '选择模板图片...';
+          if (action.region && (action.region.x || action.region.y || action.region.width || action.region.height)) {
+            label += ` [区域: ${action.region.x},${action.region.y},${action.region.width}x${action.region.height}]`;
+          }
+          return label;
+        }
         case 'click': return `点击 (${action.x}, ${action.y}) ${action.button === 'left' ? '左键' : '右键'}`;
         case 'move': return `移动到 (${action.x}, ${action.y})`;
         case 'wait': return `等待 ${action.duration} 秒`;
@@ -817,6 +834,36 @@
           html += propertyField('monitor', '显示器编号', 'number', action.monitor, '', { min: 1 });
           html += propertyField('retry_interval', '重试间隔 (秒)', 'number', action.retry_interval, '0 = 不重试', { min: 0, step: 0.1 });
           html += propertyField('timeout', '超时 (秒)', 'number', action.timeout, '0 = 单次检测', { min: 0, step: 1 });
+          html += `
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <div class="text-sm font-medium">限定识别区域 (可选)</div>
+                <button onclick="startRegionPicker()" class="px-2 py-1 text-xs rounded bg-accent text-white hover:bg-accent-secondary transition-colors flex items-center gap-1">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+                  屏幕选取
+                </button>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">X 坐标</label>
+                  <input type="number" id="region-x" value="${action.region?.x || 0}" oninput="updateRegionProperty('x', this.value)" onclick="event.stopPropagation()" class="w-full font-mono text-sm" min="0">
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">Y 坐标</label>
+                  <input type="number" id="region-y" value="${action.region?.y || 0}" oninput="updateRegionProperty('y', this.value)" onclick="event.stopPropagation()" class="w-full font-mono text-sm" min="0">
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">宽度</label>
+                  <input type="number" id="region-width" value="${action.region?.width || 0}" oninput="updateRegionProperty('width', this.value)" onclick="event.stopPropagation()" class="w-full font-mono text-sm" min="0">
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">高度</label>
+                  <input type="number" id="region-height" value="${action.region?.height || 0}" oninput="updateRegionProperty('height', this.value)" onclick="event.stopPropagation()" class="w-full font-mono text-sm" min="0">
+                </div>
+              </div>
+              <div class="text-xs text-muted-foreground">全部留 0 表示不限定区域（全屏识别）</div>
+            </div>
+          `;
           html += availableVariables();
           break;
 
@@ -910,6 +957,125 @@
       render();
     }
 
+    function updateRegionProperty(field, value) {
+      const action = findActionByUid(state.selectedId);
+      if (!action) return;
+      if (!action.region) action.region = { x: 0, y: 0, width: 0, height: 0 };
+      action.region[field] = parseInt(value) || 0;
+      render();
+    }
+
+    // ====== Region Picker ======
+    let regionPickerState = {
+      isPicking: false,
+      startX: 0,
+      startY: 0,
+      currentX: 0,
+      currentY: 0,
+    };
+
+    function startRegionPicker() {
+      const overlay = document.getElementById('regionPickerOverlay');
+      overlay.classList.remove('hidden');
+      regionPickerState.isPicking = true;
+
+      document.addEventListener('mousedown', handlePickerMouseDown);
+      document.addEventListener('keydown', handlePickerKeyDown);
+    }
+
+    function stopRegionPicker() {
+      const overlay = document.getElementById('regionPickerOverlay');
+      const box = document.getElementById('regionPickerBox');
+      overlay.classList.add('hidden');
+      box.classList.add('hidden');
+      regionPickerState.isPicking = false;
+
+      document.removeEventListener('mousedown', handlePickerMouseDown);
+      document.removeEventListener('mousemove', handlePickerMouseMove);
+      document.removeEventListener('mouseup', handlePickerMouseUp);
+      document.removeEventListener('keydown', handlePickerKeyDown);
+    }
+
+    function handlePickerMouseDown(e) {
+      if (!regionPickerState.isPicking) return;
+      regionPickerState.startX = e.clientX;
+      regionPickerState.startY = e.clientY;
+      regionPickerState.currentX = e.clientX;
+      regionPickerState.currentY = e.clientY;
+
+      const box = document.getElementById('regionPickerBox');
+      box.style.left = e.clientX + 'px';
+      box.style.top = e.clientY + 'px';
+      box.style.width = '0px';
+      box.style.height = '0px';
+      box.classList.remove('hidden');
+
+      document.addEventListener('mousemove', handlePickerMouseMove);
+      document.addEventListener('mouseup', handlePickerMouseUp);
+    }
+
+    function handlePickerMouseMove(e) {
+      if (!regionPickerState.isPicking) return;
+      regionPickerState.currentX = e.clientX;
+      regionPickerState.currentY = e.clientY;
+
+      const startX = regionPickerState.startX;
+      const startY = regionPickerState.startY;
+      const currentX = e.clientX;
+      const currentY = e.clientY;
+
+      const left = Math.min(startX, currentX);
+      const top = Math.min(startY, currentY);
+      const width = Math.abs(currentX - startX);
+      const height = Math.abs(currentY - startY);
+
+      const box = document.getElementById('regionPickerBox');
+      box.style.left = left + 'px';
+      box.style.top = top + 'px';
+      box.style.width = width + 'px';
+      box.style.height = height + 'px';
+
+      const info = document.getElementById('regionPickerInfo');
+      info.textContent = `${Math.round(left)}, ${Math.round(top)} | ${Math.round(width)} x ${Math.round(height)}`;
+    }
+
+    function handlePickerMouseUp(e) {
+      if (!regionPickerState.isPicking) return;
+
+      const startX = regionPickerState.startX;
+      const startY = regionPickerState.startY;
+      const endX = e.clientX;
+      const endY = e.clientY;
+
+      const left = Math.min(startX, endX);
+      const top = Math.min(startY, endY);
+      const width = Math.abs(endX - startX);
+      const height = Math.abs(endY - startY);
+
+      // Only apply if area is meaningful (> 5px)
+      if (width > 5 && height > 5) {
+        const action = findActionByUid(state.selectedId);
+        if (action) {
+          if (!action.region) action.region = { x: 0, y: 0, width: 0, height: 0 };
+          action.region.x = Math.round(left);
+          action.region.y = Math.round(top);
+          action.region.width = Math.round(width);
+          action.region.height = Math.round(height);
+          render();
+          renderProperties();
+          showToast(`已设置区域: ${action.region.x},${action.region.y},${action.region.width}x${action.region.height}`);
+        }
+      }
+
+      stopRegionPicker();
+    }
+
+    function handlePickerKeyDown(e) {
+      if (e.key === 'Escape') {
+        stopRegionPicker();
+      }
+    }
+
     function availableVariables() {
       const vars = getAvailableVariables();
       if (vars.length === 0) {
@@ -959,6 +1125,10 @@
       if (clean.type === 'recognize') {
         if (clean.threshold === 0.8 && clean.retry_interval === 1 && clean.timeout === 30 && clean.monitor === state.monitor) {
           // Keep essential fields only
+        }
+        // Remove empty region object (all zeros means no region)
+        if (clean.region && !clean.region.x && !clean.region.y && !clean.region.width && !clean.region.height) {
+          delete clean.region;
         }
       }
 
